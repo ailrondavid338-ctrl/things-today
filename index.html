@@ -157,6 +157,8 @@
   .check-item.done .check-box svg { opacity: 1; }
   .check-item.done .check-text { color: var(--ink-3); text-decoration: line-through; }
   .check-text { flex: 1; min-width: 0; font-size: 15px; line-height: 1.5; word-break: break-word; }
+  .check-item.readonly .check-box { cursor: default; }
+  .check-empty { color: var(--ink-3); font-size: 14px; padding: 4px 0; }
   .check-del { border: none; background: none; color: var(--ink-3); font-size: 18px; cursor: pointer; padding: 4px 6px; font-family: inherit; }
   .check-input-row { display: flex; gap: 8px; margin-top: 10px; }
   .check-input-row[hidden] { display: none; }
@@ -225,13 +227,8 @@
     </div>
   </div>
   <div class="section">
-    <div class="section-label">检查列表</div>
+    <div class="section-label" id="checkLabel">检查列表</div>
     <div id="checklist"></div>
-    <button class="add-check-btn" id="addCheckBtn">＋ 添加检查项</button>
-    <div id="checkInputRow" class="check-input-row" hidden>
-      <input class="check-input" id="checkInput" placeholder="输入检查项，回车确认">
-      <button class="btn primary" id="checkConfirm">添加</button>
-    </div>
   </div>
 </main>
 
@@ -247,7 +244,7 @@ const titleEl = $("#title"), subtitleEl = $("#subtitle"), toggleBtn = $("#toggle
 const listEl = $("#list"), emptyEl = $("#empty"), emptyText = $("#emptyText"), loadingEl = $("#loading");
 const listWrap = $("#listWrap"), detailView = $("#detailView"), toastEl = $("#toast");
 const noteDisplay = $("#noteDisplay"), noteEditWrap = $("#noteEditWrap"), noteEditor = $("#noteEditor");
-const checklistEl = $("#checklist"), addCheckBtn = $("#addCheckBtn"), checkInputRow = $("#checkInputRow"), checkInput = $("#checkInput");
+const checklistEl = $("#checklist");
 const footerEl = document.querySelector("footer");
 
 let projects = new Map();
@@ -555,57 +552,27 @@ $("#noteSave").addEventListener("click", async () => {
   } catch (e) { toast("保存失败"); }
 });
 
-/* 检查列表（本机 localStorage） */
-function clKey(id) { return "things_cl_" + id; }
-function getChecklist(id) {
-  try { return JSON.parse(localStorage.getItem(clKey(id)) || "[]"); } catch (e) { return []; }
-}
-function setChecklist(id, items) { localStorage.setItem(clKey(id), JSON.stringify(items)); }
-
+/* 检查列表（来自 Things，只读：Things 没有提供写入检查项的接口） */
 function renderChecklist() {
+  const items = Array.isArray(currentTask.checklist) ? currentTask.checklist : [];
+  const doneN = items.filter(i => i.done).length;
+  $("#checkLabel").textContent = items.length ? `检查列表 ${doneN}/${items.length}` : "检查列表";
   checklistEl.innerHTML = "";
-  const items = getChecklist(currentTask.id);
-  if (items.length) {
-    for (const it of items) checklistEl.appendChild(checkItemNode(it));
-  } else {
-    checklistEl.innerHTML = `<div style="color:var(--ink-3);font-size:14px;padding:4px 0;">还没有检查项</div>`;
+  if (!items.length) {
+    checklistEl.innerHTML = `<div class="check-empty">Things 里这条任务没有检查项</div>`;
+    return;
   }
+  for (const it of items) checklistEl.appendChild(checkItemNode(it));
 }
 function checkItemNode(it) {
   const d = document.createElement("div");
-  d.className = "check-item" + (it.done ? " done" : "");
+  d.className = "check-item readonly" + (it.done ? " done" : "");
   d.innerHTML = `
     <div class="check-box"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>
-    <div class="check-text"></div>
-    <button class="check-del">×</button>`;
-  d.querySelector(".check-text").textContent = it.text;
-  d.querySelector(".check-box").addEventListener("click", () => {
-    it.done = !it.done;
-    setChecklist(currentTask.id, getChecklist(currentTask.id).map(x => x.id === it.id ? it : x));
-    renderChecklist();
-  });
-  d.querySelector(".check-del").addEventListener("click", () => {
-    setChecklist(currentTask.id, getChecklist(currentTask.id).filter(x => x.id !== it.id));
-    renderChecklist();
-  });
+    <div class="check-text"></div>`;
+  d.querySelector(".check-text").textContent = it.title || "（空白项）";
   return d;
 }
-addCheckBtn.addEventListener("click", () => {
-  checkInputRow.hidden = false;
-  checkInput.focus();
-});
-function addCheckItem() {
-  const text = checkInput.value.trim();
-  if (!text) return;
-  const items = getChecklist(currentTask.id);
-  items.push({ id: "ci_" + Date.now(), text, done: false });
-  setChecklist(currentTask.id, items);
-  checkInput.value = "";
-  checkInputRow.hidden = true;
-  renderChecklist();
-}
-$("#checkConfirm").addEventListener("click", addCheckItem);
-checkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCheckItem(); });
 
 /* ---------- 下拉刷新 ---------- */
 document.addEventListener("touchstart", e => { touchY = e.touches[0].clientY; }, { passive: true });
