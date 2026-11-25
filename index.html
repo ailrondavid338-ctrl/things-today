@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#F5F5F3">
+<title>今天</title>
+<style>
+  :root {
+    --bg: #F5F5F3;
+    --card: #FFFFFF;
+    --ink: #1A1A1A;
+    --ink-2: #8A8A86;
+    --ink-3: #B5B5B0;
+    --line: #EBEBE8;
+    --accent: #1677FF;
+    --accent-soft: #E8F1FF;
+    --danger: #E5484D;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ---------- 顶部 ---------- */
+  header {
+    padding: 18px 20px 10px;
+    position: sticky; top: 0; z-index: 30;
+    background: linear-gradient(var(--bg) 80%, rgba(245,245,243,0));
+  }
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .title { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .title-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .pill-btn {
+    border: none; background: #EBEBE8; color: #555; font-size: 14px; font-weight: 600;
+    padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all .15s;
+    font-family: inherit;
+  }
+  .pill-btn:active { transform: scale(.95); background: #E0E0DD; }
+  .pill-btn.primary { background: var(--accent); color: #fff; }
+  .subtitle { margin-top: 7px; font-size: 19px; color: var(--ink-2); font-weight: 500; }
+  .subtitle b { color: var(--ink); font-weight: 800; font-size: 21px; }
+
+  /* ---------- 列表 ---------- */
+  main { padding: 8px 14px 40px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+    margin-bottom: 10px;
+    overflow: hidden;
+    position: relative;
+    transition: transform .18s, box-shadow .18s, opacity .18s;
+  }
+  .task {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 15px 16px;
+    cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+    transition: background .15s;
+  }
+  .task:active { background: #FAFAF9; }
+  .task + .task { border-top: 1px solid var(--line); }
+
+  .checkbox {
+    flex: 0 0 auto; width: 25px; height: 25px; margin-top: 1px;
+    border-radius: 50%;
+    border: 1.9px solid #C9C9C4;
+    display: grid; place-items: center;
+    transition: all .18s cubic-bezier(.4,0,.2,1);
+    background: transparent;
+  }
+  .checkbox svg { width: 13px; height: 13px; stroke: #fff; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transform: scale(.5); transition: all .15s .02s; }
+
+  .body { flex: 1; min-width: 0; }
+  .task-title { font-size: 16px; font-weight: 600; line-height: 1.4; word-break: break-word; transition: color .2s; }
+  .meta { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 12px; color: var(--ink-2); font-weight: 500; }
+  .proj-pill {
+    display: inline-block; background: var(--accent); color: #fff;
+    border-radius: 7px; padding: 3px 9px; font-size: 12px; font-weight: 600; line-height: 1.4;
+  }
+  .badge { background: #F1F1EF; border-radius: 6px; padding: 2px 8px; font-size: 12px; color: #7A7A76; }
+  .note { margin-top: 8px; font-size: 13px; color: var(--ink-2); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+  .drag-handle {
+    flex: 0 0 auto; width: 30px; height: 30px; margin-top: -3px; margin-right: -8px;
+    display: none; align-items: center; justify-content: center;
+    color: #C0C0BC; font-size: 20px; letter-spacing: -3px; font-weight: 700;
+    cursor: grab; touch-action: none; border-radius: 8px;
+  }
+  .sorting .drag-handle { display: flex; }
+  .sorting .task { cursor: default; }
+  .card.dragging {
+    opacity: .92; z-index: 50; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+    transition: box-shadow .18s, opacity .18s;
+  }
+
+  /* 完成态 */
+  .task.done .checkbox { background: var(--accent); border-color: var(--accent); }
+  .task.done .checkbox svg { opacity: 1; transform: scale(1); }
+  .task.done .task-title { color: var(--ink-3); text-decoration: line-through; text-decoration-color: #D0D0CC; }
+  .task.done .meta, .task.done .note { opacity: .55; }
+
+  .task.removing { animation: collapse .3s ease forwards; }
+  @keyframes collapse {
+    60% { opacity: .25; transform: translateX(8px); }
+    100% { opacity: 0; height: 0; padding-top: 0; padding-bottom: 0; margin: 0; border: none; }
+  }
+
+  /* ---------- 详情页 ---------- */
+  #detailView { display: none; }
+  #detailView.show { display: block; }
+  .detail-head { display: flex; align-items: center; gap: 10px; padding: 14px 0 4px; }
+  .back-btn {
+    border: none; background: #EBEBE8; width: 36px; height: 36px; border-radius: 50%;
+    font-size: 20px; line-height: 1; cursor: pointer; flex-shrink: 0; color: #333;
+    display: grid; place-items: center; font-family: inherit;
+  }
+  .back-btn:active { transform: scale(.94); }
+  .detail-title { font-size: 19px; font-weight: 700; line-height: 1.35; word-break: break-word; }
+  .detail-proj { margin-top: 6px; }
+
+  .section { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .section-label { font-size: 13px; font-weight: 700; color: var(--ink-2); margin-bottom: 10px; letter-spacing: .3px; }
+  .note-editable {
+    min-height: 48px; font-size: 15px; line-height: 1.6; color: var(--ink);
+    white-space: pre-wrap; word-break: break-word; cursor: text; border-radius: 10px; padding: 8px;
+  }
+  .note-editable.placeholder { color: var(--ink-3); }
+  .note-editor {
+    width: 100%; min-height: 110px; border: 1.5px solid var(--accent); border-radius: 10px;
+    padding: 10px 12px; font-size: 15px; line-height: 1.6; font-family: inherit; color: var(--ink);
+    resize: vertical; outline: none; background: #fff;
+  }
+  .note-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; }
+  .btn {
+    border: none; padding: 8px 16px; border-radius: 18px; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: transform .12s;
+  }
+  .btn:active { transform: scale(.95); }
+  .btn.ghost { background: #F1F1EF; color: #555; }
+  .btn.primary { background: var(--accent); color: #fff; }
+
+  .check-item { display: flex; align-items: center; gap: 11px; padding: 9px 2px; }
+  .check-item + .check-item { border-top: 1px solid var(--line); }
+  .check-box {
+    flex: 0 0 auto; width: 21px; height: 21px; border-radius: 6px;
+    border: 1.7px solid #C9C9C4; display: grid; place-items: center; cursor: pointer; background: #fff;
+  }
+  .check-box svg { width: 12px; height: 12px; stroke: #fff; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .check-item.done .check-box { background: var(--accent); border-color: var(--accent); }
+  .check-item.done .check-box svg { opacity: 1; }
+  .check-item.done .check-text { color: var(--ink-3); text-decoration: line-through; }
+  .check-text { flex: 1; min-width: 0; font-size: 15px; line-height: 1.5; word-break: break-word; }
+  .check-del { border: none; background: none; color: var(--ink-3); font-size: 18px; cursor: pointer; padding: 4px 6px; font-family: inherit; }
+  .check-input-row { display: flex; gap: 8px; margin-top: 10px; }
+  .check-input-row[hidden] { display: none; }
+  .check-input {
+    flex: 1; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 12px;
+    font-size: 15px; font-family: inherit; outline: none; color: var(--ink);
+  }
+  .check-input:focus { border-color: var(--accent); }
+  .add-check-btn { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; padding: 4px 0; font-family: inherit; }
+  .add-check-btn:active { opacity: .6; }
+
+  /* ---------- 空态 / 加载 ---------- */
+  .state { text-align: center; color: var(--ink-3); padding: 80px 20px; font-size: 14px; }
+  .state .dot { font-size: 40px; line-height: 1; margin-bottom: 12px; opacity: .6; }
+  .loading { display: flex; justify-content: center; padding: 40px 0; }
+  .spin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid #E3E3E0; border-top-color: var(--accent); animation: rot .8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  footer { text-align: center; color: var(--ink-3); font-size: 11px; padding: 8px 0 16px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,20,.88); color: #fff; font-size: 13px; padding: 9px 16px; border-radius: 20px;
+    opacity: 0; transition: all .25s; pointer-events: none; z-index: 99;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <div class="title" id="title">今天</div>
+    <div class="title-actions">
+      <button class="pill-btn" id="sortBtn">排序</button>
+      <button class="pill-btn" id="toggleBtn">已完成</button>
+    </div>
+  </div>
+  <div class="subtitle" id="subtitle"></div>
+</header>
+
+<main id="listWrap">
+  <div id="list" class=""></div>
+  <div class="state" id="empty" hidden>
+    <div class="dot">✓</div>
+    <span id="emptyText">今天没有待办任务</span>
+  </div>
+  <div class="loading" id="loading"><div class="spin"></div></div>
+</main>
+
+<main id="detailView">
+  <div class="detail-head">
+    <button class="back-btn" id="backBtn">‹</button>
+    <div style="flex:1;min-width:0;">
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="detail-proj" id="detailProj"></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-label">备注</div>
+    <div class="note-editable placeholder" id="noteDisplay">点击填写备注</div>
+    <div id="noteEditWrap" hidden>
+      <textarea class="note-editor" id="noteEditor" placeholder="写点备注…"></textarea>
+      <div class="note-actions">
+        <button class="btn ghost" id="noteCancel">取消</button>
+        <button class="btn primary" id="noteSave">保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-label">检查列表</div>
+    <div id="checklist"></div>
+    <button class="add-check-btn" id="addCheckBtn">＋ 添加检查项</button>
+    <div id="checkInputRow" class="check-input-row" hidden>
+      <input class="check-input" id="checkInput" placeholder="输入检查项，回车确认">
+      <button class="btn primary" id="checkConfirm">添加</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+<footer>数据同步自 Things 3 · 下拉刷新</footer>
+
+<script>
+const SUPABASE_URL = "https://svayhjiyjufkpzinikia.supabase.co";
+const SUPABASE_KEY = "sb_publishable_S90_q2xRRSGgu0PhuKjwLw_XrHUuhZz";
+
+const $ = (s) => document.querySelector(s);
+const titleEl = $("#title"), subtitleEl = $("#subtitle"), toggleBtn = $("#toggleBtn"), sortBtn = $("#sortBtn");
+const listEl = $("#list"), emptyEl = $("#empty"), emptyText = $("#emptyText"), loadingEl = $("#loading");
+const listWrap = $("#listWrap"), detailView = $("#detailView"), toastEl = $("#toast");
+const noteDisplay = $("#noteDisplay"), noteEditWrap = $("#noteEditWrap"), noteEditor = $("#noteEditor");
+const checklistEl = $("#checklist"), addCheckBtn = $("#addCheckBtn"), checkInputRow = $("#checkInputRow"), checkInput = $("#checkInput");
+const footerEl = document.querySelector("footer");
+
+let projects = new Map();
+let todayTasks = [], doneTasks = [];
+let view = "today";          // today | done
+let sortMode = false;
+let currentTask = null;
+let touchY = null;
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function dateSub() {
+  const d = new Date();
+  const w = ["日","一","二","三","四","五","六"][d.getDay()];
+  return `${d.getMonth()+1}月${d.getDate()}日 · 周${w}`;
+}
+function subtitle() {
+  if (view === "done") {
+    subtitleEl.innerHTML = `已完成 <b>${doneTasks.length}</b> 项`;
+  } else {
+    subtitleEl.innerHTML = `${dateSub()} · 剩余 <b>${todayTasks.length}</b> 项`;
+  }
+}
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toastEl.classList.remove("show"), 1800);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("json") ? res.json() : null;
+}
+
+/* ---------- 加载 ---------- */
+async function load() {
+  const [projRows] = await Promise.all([
+    api(`projects?select=id,name`),
+  ]);
+  projects = new Map(projRows.map(p => [p.id, p.name]));
+  await Promise.all([loadToday(), loadDone()]);
+}
+
+async function loadToday() {
+  const tasks = await api(`tasks?select=*&status=eq.0&or=(start_bucket.eq.1,start_date.lte.${todayStr()})&order=order.asc`);
+  todayTasks = tasks;
+  if (view === "today") renderList();
+}
+async function loadDone() {
+  const tasks = await api(`tasks?select=*&status=eq.3&order=order.asc`);
+  doneTasks = tasks;
+  if (view === "done") renderList();
+}
+
+/* ---------- 渲染 ---------- */
+function renderList() {
+  listEl.innerHTML = "";
+  loadingEl.style.display = "none";
+  const arr = view === "today" ? todayTasks : doneTasks;
+  if (!arr.length) {
+    emptyEl.hidden = false;
+    emptyText.textContent = view === "today" ? "今天没有待办任务" : "还没有完成的任务";
+  } else {
+    emptyEl.hidden = true;
+    for (const t of arr) listEl.appendChild(taskNode(t));
+  }
+  listEl.classList.toggle("sorting", sortMode);
+  subtitle();
+}
+
+function fmt(s) { const [, m, d] = (s || "").split("-"); return `${+m}月${+d}日`; }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+function taskNode(t) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.dataset.id = t.id;
+  const row = document.createElement("div");
+  row.className = "task" + (view === "done" ? " done" : "");
+  const proj = projects.get(t.project_id);
+  row.innerHTML = `
+    <div class="checkbox"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>
+    <div class="body">
+      <div class="task-title"></div>
+      <div class="meta">${proj ? `<span class="proj-pill">${esc(proj)}</span>` : ""}${t.due_date ? `<span class="badge">截止 ${fmt(t.due_date)}</span>` : ""}</div>
+      ${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}
+    </div>
+    <div class="drag-handle">☰</div>`;
+  row.querySelector(".task-title").textContent = t.title;
+
+  // 圆圈：完成 / 取消完成
+  row.querySelector(".checkbox").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await toggleDone(t, row, card);
+  });
+
+  // 任务主体：进详情
+  row.addEventListener("click", async () => {
+    if (sortMode) return;
+    openDetail(t);
+  });
+
+  // 拖拽排序
+  const handle = row.querySelector(".drag-handle");
+  handle.addEventListener("touchstart", (e) => startDrag(e, card, t), { passive: false });
+
+  card.appendChild(row);
+  return card;
+}
+
+async function toggleDone(t, row, card) {
+  if (view === "today") {
+    row.classList.add("done");
+    try {
+      await api(`tasks?id=eq.${t.id}`, { method: "PATCH", body: JSON.stringify({ status: 3 }) });
+      todayTasks = todayTasks.filter(x => x.id !== t.id);
+      doneTasks.unshift(t);
+      t.status = 3;
+      row.classList.add("removing");
+      setTimeout(() => { card.remove(); renderList(); }, 280);
+      toast("已完成");
+    } catch (e) {
+      row.classList.remove("done");
+      toast("操作失败");
+    }
+  } else {
+    try {
+      await api(`tasks?id=eq.${t.id}`, { method: "PATCH", body: JSON.stringify({ status: 0 }) });
+      doneTasks = doneTasks.filter(x => x.id !== t.id);
+      t.status = 0;
+      todayTasks.push(t);
+      card.remove();
+      renderList();
+      toast("已恢复为待办");
+    } catch (e) {
+      toast("操作失败");
+    }
+  }
+}
+
+/* ---------- 视图切换 ---------- */
+function showToday() {
+  view = "today";
+  sortMode = false;
+  detailView.classList.remove("show");
+  listWrap.style.display = "block";
+  titleEl.textContent = "今天";
+  toggleBtn.textContent = "已完成";
+  sortBtn.hidden = false;
+  sortBtn.textContent = "排序";
+  sortBtn.classList.remove("primary");
+  renderList();
+}
+function showDone() {
+  view = "done";
+  sortMode = false;
+  detailView.classList.remove("show");
+  listWrap.style.display = "block";
+  titleEl.textContent = "已完成";
+  toggleBtn.textContent = "今天";
+  sortBtn.hidden = true;
+  renderList();
+}
+toggleBtn.addEventListener("click", () => view === "today" ? showDone() : showToday());
+
+/* ---------- 排序 ---------- */
+sortBtn.addEventListener("click", () => {
+  if (!sortMode) {
+    sortMode = true;
+    sortBtn.textContent = "完成";
+    sortBtn.classList.add("primary");
+    renderList();
+  } else {
+    sortMode = false;
+    sortBtn.textContent = "排序";
+    sortBtn.classList.remove("primary");
+    renderList();
+    saveOrder();
+  }
+});
+
+let dragState = null;
+function startDrag(e, card, t) {
+  if (!sortMode || view !== "today") return;
+  e.preventDefault();
+  const y0 = e.touches[0].clientY;
+  const origIndex = todayTasks.findIndex(x => x.id === t.id);
+  dragState = { card, t, y0, origIndex, moved: false };
+  card.classList.add("dragging");
+  card.style.transform = "translateY(0)";
+
+  const move = (ev) => {
+    const dy = ev.touches[0].clientY - y0;
+    if (Math.abs(dy) > 4) dragState.moved = true;
+    card.style.transform = `translateY(${dy}px)`;
+    ev.preventDefault();
+  };
+  const end = () => {
+    document.removeEventListener("touchmove", move);
+    document.removeEventListener("touchend", end);
+    if (!dragState.moved) {
+      card.classList.remove("dragging");
+      card.style.transform = "";
+      dragState = null;
+      return;
+    }
+    // 按松手时卡片中心位置计算目标下标
+    const rect = card.getBoundingClientRect();
+    const center = rect.top + rect.height / 2;
+    const others = Array.from(listEl.querySelectorAll(".card:not(.dragging)"));
+    let target = others.length;
+    for (let i = 0; i < others.length; i++) {
+      const r = others[i].getBoundingClientRect();
+      if (center < r.top + r.height / 2) { target = i; break; }
+    }
+    card.classList.remove("dragging");
+    card.style.transform = "";
+    const cur = todayTasks.findIndex(x => x.id === t.id);
+    if (cur !== target) {
+      const [it] = todayTasks.splice(cur, 1);
+      todayTasks.splice(target, 0, it);
+    }
+    dragState = null;
+    renderList();
+  };
+  document.addEventListener("touchmove", move, { passive: false });
+  document.addEventListener("touchend", end);
+}
+
+async function saveOrder() {
+  const rows = todayTasks.map((t, i) => ({ id: t.id, order: i + 1 }));
+  try {
+    await api("tasks", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates,return=representation", "on_conflict": "id" },
+      body: JSON.stringify(rows),
+    });
+    toast("排序已保存");
+  } catch (e) {
+    toast("保存失败");
+  }
+}
+
+/* ---------- 详情页 ---------- */
+function openDetail(t) {
+  currentTask = t;
+  detailView.classList.add("show");
+  listWrap.style.display = "none";
+  document.querySelector("header").style.display = "none";
+  footerEl.style.display = "none";
+  $("#detailTitle").textContent = t.title;
+  const proj = projects.get(t.project_id);
+  $("#detailProj").innerHTML = proj ? `<span class="proj-pill">${esc(proj)}</span>` : "";
+  renderNote();
+  renderChecklist();
+}
+$("#backBtn").addEventListener("click", () => {
+  detailView.classList.remove("show");
+  listWrap.style.display = "block";
+  document.querySelector("header").style.display = "";
+  footerEl.style.display = "";
+  renderList();
+});
+
+/* 备注 */
+function renderNote() {
+  noteEditWrap.hidden = true;
+  if (currentTask.note) {
+    noteDisplay.textContent = currentTask.note;
+    noteDisplay.classList.remove("placeholder");
+  } else {
+    noteDisplay.textContent = "点击填写备注";
+    noteDisplay.classList.add("placeholder");
+  }
+}
+noteDisplay.addEventListener("click", () => {
+  noteEditor.value = currentTask.note || "";
+  noteDisplay.hidden = true;
+  noteEditWrap.hidden = false;
+  noteEditor.focus();
+});
+$("#noteCancel").addEventListener("click", () => { noteEditWrap.hidden = true; noteDisplay.hidden = false; });
+$("#noteSave").addEventListener("click", async () => {
+  const val = noteEditor.value.trim();
+  try {
+    await api(`tasks?id=eq.${currentTask.id}`, { method: "PATCH", body: JSON.stringify({ note: val }) });
+    currentTask.note = val;
+    renderNote();
+    noteDisplay.hidden = false;
+    toast("已保存");
+  } catch (e) { toast("保存失败"); }
+});
+
+/* 检查列表（本机 localStorage） */
+function clKey(id) { return "things_cl_" + id; }
+function getChecklist(id) {
+  try { return JSON.parse(localStorage.getItem(clKey(id)) || "[]"); } catch (e) { return []; }
+}
+function setChecklist(id, items) { localStorage.setItem(clKey(id), JSON.stringify(items)); }
+
+function renderChecklist() {
+  checklistEl.innerHTML = "";
+  const items = getChecklist(currentTask.id);
+  if (items.length) {
+    for (const it of items) checklistEl.appendChild(checkItemNode(it));
+  } else {
+    checklistEl.innerHTML = `<div style="color:var(--ink-3);font-size:14px;padding:4px 0;">还没有检查项</div>`;
+  }
+}
+function checkItemNode(it) {
+  const d = document.createElement("div");
+  d.className = "check-item" + (it.done ? " done" : "");
+  d.innerHTML = `
+    <div class="check-box"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>
+    <div class="check-text"></div>
+    <button class="check-del">×</button>`;
+  d.querySelector(".check-text").textContent = it.text;
+  d.querySelector(".check-box").addEventListener("click", () => {
+    it.done = !it.done;
+    setChecklist(currentTask.id, getChecklist(currentTask.id).map(x => x.id === it.id ? it : x));
+    renderChecklist();
+  });
+  d.querySelector(".check-del").addEventListener("click", () => {
+    setChecklist(currentTask.id, getChecklist(currentTask.id).filter(x => x.id !== it.id));
+    renderChecklist();
+  });
+  return d;
+}
+addCheckBtn.addEventListener("click", () => {
+  checkInputRow.hidden = false;
+  checkInput.focus();
+});
+function addCheckItem() {
+  const text = checkInput.value.trim();
+  if (!text) return;
+  const items = getChecklist(currentTask.id);
+  items.push({ id: "ci_" + Date.now(), text, done: false });
+  setChecklist(currentTask.id, items);
+  checkInput.value = "";
+  checkInputRow.hidden = true;
+  renderChecklist();
+}
+$("#checkConfirm").addEventListener("click", addCheckItem);
+checkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCheckItem(); });
+
+/* ---------- 下拉刷新 ---------- */
+document.addEventListener("touchstart", e => { touchY = e.touches[0].clientY; }, { passive: true });
+document.addEventListener("touchend", async e => {
+  if (touchY === null || view !== "today" && view !== "done") return;
+  const dy = e.changedTouches[0].clientY - touchY;
+  if (dy > 90 && window.scrollY === 0 && !sortMode && !detailView.classList.contains("show")) {
+    loadingEl.style.display = "flex";
+    listEl.innerHTML = "";
+    try { await load(); toast("已刷新"); } catch (e) { toast("刷新失败"); }
+  }
+  touchY = null;
+});
+
+/* ---------- 启动 ---------- */
+subtitle();
+load().then(renderList).catch(() => {
+  loadingEl.style.display = "none";
+  emptyEl.hidden = false;
+  emptyText.textContent = "加载失败，请下拉重试";
+});
+</script>
+</body>
+</html>
