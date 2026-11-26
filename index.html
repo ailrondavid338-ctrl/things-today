@@ -288,7 +288,14 @@ async function api(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j.message || j.hint || "";
+    } catch (e) { /* 非 JSON 响应 */ }
+    throw new Error(`HTTP ${res.status}${detail ? " · " + detail : ""}`);
+  }
   const ct = res.headers.get("content-type") || "";
   return ct.includes("json") ? res.json() : null;
 }
@@ -489,16 +496,20 @@ function startDrag(e, card, t) {
 }
 
 async function saveOrder() {
-  const rows = todayTasks.map((t, i) => ({ id: t.id, order: i + 1 }));
+  // 逐行 PATCH 只改 order：之前用「只带 id+order 的 upsert」会因缺 title 触发
+  // not-null 约束（23502）而整批失败，Postgres 在冲突合并前就会校验非空列。
   try {
-    await api("tasks", {
-      method: "POST",
-      headers: { "Prefer": "resolution=merge-duplicates,return=representation", "on_conflict": "id" },
-      body: JSON.stringify(rows),
-    });
+    await Promise.all(todayTasks.map((t, i) =>
+      api(`tasks?id=eq.${encodeURIComponent(t.id)}`, {
+        method: "PATCH",
+        headers: { "Prefer": "return=minimal" },
+        body: JSON.stringify({ order: i + 1 }),
+      })
+    ));
     toast("排序已保存");
   } catch (e) {
-    toast("保存失败");
+    console.error("保存排序失败", e);
+    toast("保存失败：" + (e.message || "未知错误"));
   }
 }
 
@@ -549,7 +560,7 @@ $("#noteSave").addEventListener("click", async () => {
     renderNote();
     noteDisplay.hidden = false;
     toast("已保存");
-  } catch (e) { toast("保存失败"); }
+  } catch (e) { toast("保存失败：" + (e.message || "未知错误")); }
 });
 
 /* 检查列表（来自 Things，只读：Things 没有提供写入检查项的接口） */
