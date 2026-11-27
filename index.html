@@ -34,8 +34,15 @@
     background: linear-gradient(var(--bg) 80%, rgba(245,245,243,0));
   }
   .title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .title { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .title { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; flex: 1; min-width: 0; }
   .title-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .icon-btn {
+    flex: 0 0 auto; width: 38px; height: 38px; border: none; border-radius: 50%;
+    background: #EBEBE8; color: #555; display: grid; place-items: center; cursor: pointer;
+    transition: all .15s; font-family: inherit;
+  }
+  .icon-btn:active { transform: scale(.94); background: #E0E0DD; }
+  .icon-btn svg { width: 19px; height: 19px; stroke: currentColor; stroke-width: 2.2; fill: none; stroke-linecap: round; }
   .pill-btn {
     border: none; background: #EBEBE8; color: #555; font-size: 14px; font-weight: 600;
     padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all .15s;
@@ -45,6 +52,42 @@
   .pill-btn.primary { background: var(--accent); color: #fff; }
   .subtitle { margin-top: 7px; font-size: 19px; color: var(--ink-2); font-weight: 500; }
   .subtitle b { color: var(--ink); font-weight: 800; font-size: 21px; }
+
+  /* ---------- 弹出层 ---------- */
+  .sheet-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 60;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .sheet-mask.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+    background: var(--card); border-radius: 20px 20px 0 0;
+    padding: 10px 12px calc(18px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 30px rgba(0,0,0,.12);
+    transform: translateY(115%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
+  }
+  .sheet.show { transform: translateY(0); }
+  .sheet-title { font-size: 13px; color: var(--ink-3); font-weight: 600; padding: 8px 14px 6px; }
+  .sheet-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 15px 14px; border-radius: 12px; font-size: 17px; font-weight: 600; cursor: pointer;
+  }
+  .sheet-item:active { background: #F5F5F3; }
+  .sheet-item.active { color: var(--accent); background: var(--accent-soft); }
+  .sheet-item .hint { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+  .add-input {
+    width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    font-size: 16px; font-family: inherit; outline: none; margin-bottom: 12px; color: var(--ink);
+  }
+  .add-input:focus { border-color: var(--accent); }
+  .add-targets { display: flex; gap: 8px; margin-bottom: 14px; }
+  .target-chip {
+    flex: 1; border: 1.5px solid var(--line); background: #fff; border-radius: 12px;
+    padding: 11px 0; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; font-family: inherit;
+  }
+  .target-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .add-actions { display: flex; gap: 10px; }
+  .add-actions .btn { flex: 1; padding: 12px 0; border-radius: 12px; font-size: 15px; font-weight: 600; border: none; font-family: inherit; }
 
   /* ---------- 列表 ---------- */
   main { padding: 8px 14px 40px; }
@@ -189,10 +232,13 @@
 <body>
 <header>
   <div class="title-row">
+    <button class="icon-btn" id="menuBtn" aria-label="切换列表">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
     <div class="title" id="title">今天</div>
     <div class="title-actions">
       <button class="pill-btn" id="sortBtn">排序</button>
-      <button class="pill-btn" id="toggleBtn">已完成</button>
+      <button class="pill-btn" id="addBtn">＋</button>
     </div>
   </div>
   <div class="subtitle" id="subtitle"></div>
@@ -233,6 +279,29 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<div class="sheet-mask" id="mask"></div>
+
+<div class="sheet" id="menuSheet">
+  <div class="sheet-title">列表</div>
+  <div class="sheet-item" data-view="today">今天<span class="hint" id="hToday"></span></div>
+  <div class="sheet-item" data-view="inbox">收件箱<span class="hint" id="hInbox"></span></div>
+  <div class="sheet-item" data-view="done">已完成<span class="hint" id="hDone"></span></div>
+</div>
+
+<div class="sheet" id="addSheet">
+  <div class="sheet-title">新建任务</div>
+  <input class="add-input" id="addInput" placeholder="要做什么？">
+  <div class="add-targets">
+    <button class="target-chip" data-target="today">放到今天</button>
+    <button class="target-chip" data-target="inbox">放到收件箱</button>
+  </div>
+  <div class="add-actions">
+    <button class="btn ghost" id="addCancel">取消</button>
+    <button class="btn primary" id="addConfirm">添加</button>
+  </div>
+</div>
+
 <footer>数据同步自 Things 3 · 下拉刷新</footer>
 
 <script>
@@ -240,19 +309,23 @@ const SUPABASE_URL = "https://svayhjiyjufkpzinikia.supabase.co";
 const SUPABASE_KEY = "sb_publishable_S90_q2xRRSGgu0PhuKjwLw_XrHUuhZz";
 
 const $ = (s) => document.querySelector(s);
-const titleEl = $("#title"), subtitleEl = $("#subtitle"), toggleBtn = $("#toggleBtn"), sortBtn = $("#sortBtn");
+const titleEl = $("#title"), subtitleEl = $("#subtitle"), sortBtn = $("#sortBtn");
 const listEl = $("#list"), emptyEl = $("#empty"), emptyText = $("#emptyText"), loadingEl = $("#loading");
 const listWrap = $("#listWrap"), detailView = $("#detailView"), toastEl = $("#toast");
 const noteDisplay = $("#noteDisplay"), noteEditWrap = $("#noteEditWrap"), noteEditor = $("#noteEditor");
 const checklistEl = $("#checklist");
 const footerEl = document.querySelector("footer");
+const menuBtn = $("#menuBtn"), addBtn = $("#addBtn");
+const mask = $("#mask"), menuSheet = $("#menuSheet"), addSheet = $("#addSheet");
+const addInput = $("#addInput");
 
 let projects = new Map();
-let todayTasks = [], doneTasks = [];
-let view = "today";          // today | done
+let todayTasks = [], inboxTasks = [], doneTasks = [];
+let view = "today";          // today | inbox | done
 let sortMode = false;
 let currentTask = null;
 let touchY = null;
+let addTarget = "today";
 
 function todayStr() {
   const d = new Date();
@@ -266,9 +339,17 @@ function dateSub() {
 function subtitle() {
   if (view === "done") {
     subtitleEl.innerHTML = `已完成 <b>${doneTasks.length}</b> 项`;
+  } else if (view === "inbox") {
+    subtitleEl.innerHTML = `收件箱 · <b>${inboxTasks.length}</b> 项`;
   } else {
     subtitleEl.innerHTML = `${dateSub()} · 剩余 <b>${todayTasks.length}</b> 项`;
   }
+  $("#hToday").textContent = `${todayTasks.length} 项`;
+  $("#hInbox").textContent = `${inboxTasks.length} 项`;
+  $("#hDone").textContent = `${doneTasks.length} 项`;
+}
+function currentList() {
+  return view === "inbox" ? inboxTasks : view === "done" ? doneTasks : todayTasks;
 }
 function toast(msg) {
   toastEl.textContent = msg;
@@ -306,13 +387,18 @@ async function load() {
     api(`projects?select=id,name`),
   ]);
   projects = new Map(projRows.map(p => [p.id, p.name]));
-  await Promise.all([loadToday(), loadDone()]);
+  await Promise.all([loadToday(), loadInbox(), loadDone()]);
 }
 
 async function loadToday() {
   const tasks = await api(`tasks?select=*&status=eq.0&or=(start_bucket.eq.1,start_date.lte.${todayStr()})&order=order.asc`);
   todayTasks = tasks;
   if (view === "today") renderList();
+}
+async function loadInbox() {
+  const tasks = await api(`tasks?select=*&status=eq.0&start_bucket=eq.2&order=order.asc`);
+  inboxTasks = tasks;
+  if (view === "inbox") renderList();
 }
 async function loadDone() {
   const tasks = await api(`tasks?select=*&status=eq.3&order=order.asc`);
@@ -324,10 +410,11 @@ async function loadDone() {
 function renderList() {
   listEl.innerHTML = "";
   loadingEl.style.display = "none";
-  const arr = view === "today" ? todayTasks : doneTasks;
+  const arr = currentList();
   if (!arr.length) {
     emptyEl.hidden = false;
-    emptyText.textContent = view === "today" ? "今天没有待办任务" : "还没有完成的任务";
+    emptyText.textContent = view === "today" ? "今天没有待办任务"
+      : view === "inbox" ? "收件箱是空的" : "还没有完成的任务";
   } else {
     emptyEl.hidden = true;
     for (const t of arr) listEl.appendChild(taskNode(t));
@@ -377,11 +464,12 @@ function taskNode(t) {
 }
 
 async function toggleDone(t, row, card) {
-  if (view === "today") {
+  if (view !== "done") {
     row.classList.add("done");
     try {
       await api(`tasks?id=eq.${t.id}`, { method: "PATCH", body: JSON.stringify({ status: 3 }) });
-      todayTasks = todayTasks.filter(x => x.id !== t.id);
+      if (view === "inbox") inboxTasks = inboxTasks.filter(x => x.id !== t.id);
+      else todayTasks = todayTasks.filter(x => x.id !== t.id);
       doneTasks.unshift(t);
       t.status = 3;
       row.classList.add("removing");
@@ -396,7 +484,7 @@ async function toggleDone(t, row, card) {
       await api(`tasks?id=eq.${t.id}`, { method: "PATCH", body: JSON.stringify({ status: 0 }) });
       doneTasks = doneTasks.filter(x => x.id !== t.id);
       t.status = 0;
-      todayTasks.push(t);
+      if (t.start_bucket === 2) inboxTasks.push(t); else todayTasks.push(t);
       card.remove();
       renderList();
       toast("已恢复为待办");
@@ -407,29 +495,95 @@ async function toggleDone(t, row, card) {
 }
 
 /* ---------- 视图切换 ---------- */
-function showToday() {
-  view = "today";
+function setView(v) {
+  view = v;
   sortMode = false;
   detailView.classList.remove("show");
   listWrap.style.display = "block";
-  titleEl.textContent = "今天";
-  toggleBtn.textContent = "已完成";
-  sortBtn.hidden = false;
+  document.querySelector("header").style.display = "";
+  footerEl.style.display = "";
+  titleEl.textContent = v === "today" ? "今天" : v === "inbox" ? "收件箱" : "已完成";
+  sortBtn.hidden = v === "done";
   sortBtn.textContent = "排序";
   sortBtn.classList.remove("primary");
+  // 「今天」和「收件箱」能新建，已完成页不行
+  addBtn.hidden = v === "done";
   renderList();
 }
-function showDone() {
-  view = "done";
-  sortMode = false;
-  detailView.classList.remove("show");
-  listWrap.style.display = "block";
-  titleEl.textContent = "已完成";
-  toggleBtn.textContent = "今天";
-  sortBtn.hidden = true;
-  renderList();
+
+/* ---------- 列表菜单 ---------- */
+function openMenu() {
+  [...menuSheet.querySelectorAll(".sheet-item")].forEach(el =>
+    el.classList.toggle("active", el.dataset.view === view));
+  subtitle();
+  mask.classList.add("show");
+  menuSheet.classList.add("show");
 }
-toggleBtn.addEventListener("click", () => view === "today" ? showDone() : showToday());
+function closeSheets() {
+  mask.classList.remove("show");
+  menuSheet.classList.remove("show");
+  addSheet.classList.remove("show");
+}
+menuBtn.addEventListener("click", openMenu);
+mask.addEventListener("click", closeSheets);
+menuSheet.querySelectorAll(".sheet-item").forEach(el => {
+  el.addEventListener("click", () => {
+    closeSheets();
+    setView(el.dataset.view);
+  });
+});
+
+/* ---------- 新建任务 ---------- */
+function openAddSheet() {
+  addTarget = view === "inbox" ? "inbox" : "today";
+  addInput.value = "";
+  syncTargetChips();
+  mask.classList.add("show");
+  addSheet.classList.add("show");
+  setTimeout(() => addInput.focus(), 260);
+}
+function syncTargetChips() {
+  addSheet.querySelectorAll(".target-chip").forEach(c =>
+    c.classList.toggle("active", c.dataset.target === addTarget));
+}
+addBtn.addEventListener("click", openAddSheet);
+addSheet.querySelectorAll(".target-chip").forEach(c => {
+  c.addEventListener("click", () => { addTarget = c.dataset.target; syncTargetChips(); });
+});
+$("#addCancel").addEventListener("click", closeSheets);
+
+async function submitAdd() {
+  const title = addInput.value.trim();
+  if (!title) { addInput.focus(); return; }
+  const row = {
+    id: `web-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title,
+    note: "",
+    project_id: null,
+    heading_id: null,
+    status: 0,
+    order: (currentList().length || 0) + 1,
+    start_date: addTarget === "today" ? todayStr() : null,
+    start_bucket: addTarget === "today" ? 1 : 2,
+  };
+  try {
+    await api("tasks", {
+      method: "POST",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify([row]),
+    });
+    if (addTarget === "today") todayTasks.push(row); else inboxTasks.push(row);
+    addInput.value = "";
+    closeSheets();
+    if (view === "done") setView(addTarget);
+    renderList();
+    toast("已添加，约 1 分钟后同步进 Things");
+  } catch (e) {
+    toast("添加失败：" + (e.message || "未知错误"));
+  }
+}
+$("#addConfirm").addEventListener("click", submitAdd);
+addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAdd(); });
 
 /* ---------- 排序 ---------- */
 sortBtn.addEventListener("click", () => {
@@ -449,10 +603,11 @@ sortBtn.addEventListener("click", () => {
 
 let dragState = null;
 function startDrag(e, card, t) {
-  if (!sortMode || view !== "today") return;
+  if (!sortMode || view === "done") return;
   e.preventDefault();
   const y0 = e.touches[0].clientY;
-  const origIndex = todayTasks.findIndex(x => x.id === t.id);
+  const list = currentList();
+  const origIndex = list.findIndex(x => x.id === t.id);
   dragState = { card, t, y0, origIndex, moved: false };
   card.classList.add("dragging");
   card.style.transform = "translateY(0)";
@@ -483,10 +638,11 @@ function startDrag(e, card, t) {
     }
     card.classList.remove("dragging");
     card.style.transform = "";
-    const cur = todayTasks.findIndex(x => x.id === t.id);
+    const list2 = currentList();
+    const cur = list2.findIndex(x => x.id === t.id);
     if (cur !== target) {
-      const [it] = todayTasks.splice(cur, 1);
-      todayTasks.splice(target, 0, it);
+      const [it] = list2.splice(cur, 1);
+      list2.splice(target, 0, it);
     }
     dragState = null;
     renderList();
@@ -499,7 +655,7 @@ async function saveOrder() {
   // 逐行 PATCH 只改 order：之前用「只带 id+order 的 upsert」会因缺 title 触发
   // not-null 约束（23502）而整批失败，Postgres 在冲突合并前就会校验非空列。
   try {
-    await Promise.all(todayTasks.map((t, i) =>
+    await Promise.all(currentList().map((t, i) =>
       api(`tasks?id=eq.${encodeURIComponent(t.id)}`, {
         method: "PATCH",
         headers: { "Prefer": "return=minimal" },
