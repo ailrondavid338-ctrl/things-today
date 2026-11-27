@@ -391,7 +391,9 @@ async function load() {
 }
 
 async function loadToday() {
-  const tasks = await api(`tasks?select=*&status=eq.0&or=(start_bucket.eq.1,start_date.lte.${todayStr()})&order=order.asc`);
+  // 只认 start_bucket=1（= Things「今天」列表）。挪走/改期的行会被同步脚本改成 0，
+  // 不再用 start_date<=today 兜底，否则挪到过去日期的任务会漏在今日视图里。
+  const tasks = await api(`tasks?select=*&status=eq.0&start_bucket=eq.1&order=order.asc`);
   todayTasks = tasks;
   if (view === "today") renderList();
 }
